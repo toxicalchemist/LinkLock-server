@@ -15,7 +15,7 @@ async function runTest() {
 
     const docCountBefore = await SystemLog.countDocuments();
     console.log("Docs before clear:", docCountBefore);
-    
+
     const result = await SystemLog.deleteMany({
         $or: [
             { eventType: null },
@@ -23,7 +23,7 @@ async function runTest() {
             { secretKey: { $exists: false } }
         ]
     });
-    
+
     console.log("Delete result:", result);
     const docCountAfter = await SystemLog.countDocuments();
     console.log("Docs after clear:", docCountAfter);
