@@ -5,6 +5,10 @@ const mongoose = require('mongoose');
 
 const Secret = require('./models/Secret');
 const SystemLog = require('./models/SystemLog');
+const Settings = require('./models/Settings');
+const authController = require('./controllers/authController');
+const vaultController = require('./controllers/vaultController');
+const { authMiddleware, adminMiddleware } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -60,6 +64,7 @@ const initializeDB = async () => {
             try {
                 const now = new Date();
                 const secretsToBurn = await Secret.find({
+                    status: 'Live',
                     $or: [
                         { $expr: { $gte: ["$currentViews", "$viewLimit"] } },
                         { expiresAt: { $lte: now } }
@@ -81,8 +86,10 @@ const initializeDB = async () => {
                         }
                     }
 
-                    // 1. Delete Document
-                    await Secret.deleteOne({ _id: secret._id });
+                    // 1. Mark Document as Burned
+                    await Secret.updateOne({ _id: secret._id }, {
+                        $set: { status: 'Burned', encryptedContent: 'BURNED', iv: 'BURNED', fileUrl: null, fileType: null }
+                    });
                     
                     // 2. Log
                     await SystemLog.create({
@@ -122,12 +129,17 @@ const initializeDB = async () => {
 initializeDB();
 
 // Route to create a new secret
-app.post('/api/secrets', upload.single('file'), async (req, res) => {
+app.post('/api/secrets', authMiddleware, upload.single('file'), async (req, res) => {
     try {
         console.log('Incoming Payload Body:', req.body);
         console.log('Incoming File:', req.file);
         const { key, encryptedContent, iv, viewLimit, expiryValue, expiryUnit } = req.body;
         const file = req.file;
+        
+        const settings = await Settings.findOne({});
+        if (settings && settings.maintenanceMode) {
+            return res.status(503).json({ error: 'System is under maintenance. Creation disabled.' });
+        }
         
         if (!key || !encryptedContent || !expiryValue || !expiryUnit) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -142,10 +154,10 @@ app.post('/api/secrets', upload.single('file'), async (req, res) => {
 
         const totalSeconds = parseInt(expiryValue) * unitMultiplier;
 
-        // Validation: Max Limit of 7 days (604800 seconds)
-        const MAX_SECONDS = 7 * 24 * 60 * 60;
+        // Validation: Max Limit
+        const MAX_SECONDS = settings && settings.globalMaxExpiry ? settings.globalMaxExpiry : 7 * 24 * 60 * 60;
         if (totalSeconds <= 0 || totalSeconds > MAX_SECONDS) {
-            return res.status(400).json({ error: 'Expiry must be between 1 minute and 7 days' });
+            return res.status(400).json({ error: `Expiry must be between 1 minute and ${MAX_SECONDS / 86400} days` });
         }
 
         // Calculate exact expiresAt date
@@ -156,7 +168,8 @@ app.post('/api/secrets', upload.single('file'), async (req, res) => {
             encryptedContent,
             iv,
             viewLimit: viewLimit || 1,
-            expiresAt
+            expiresAt,
+            creatorId: req.user.id
         };
 
         if (file) {
@@ -180,7 +193,7 @@ app.get('/api/secrets/:key', async (req, res) => {
     try {
         const { key } = req.params;
 
-        const secret = await Secret.findOne({ key });
+        const secret = await Secret.findOne({ key, status: 'Live' });
 
         if (!secret) {
             return res.status(404).json({ error: 'Secret not found or has been burned.' });
@@ -213,8 +226,19 @@ app.get('/api/secrets/:key', async (req, res) => {
 });
 
 const adminController = require('./controllers/adminController');
-app.get('/api/admin/overview', adminController.getOverview);
-app.delete('/api/admin/logs/legacy', adminController.clearLegacyLogs);
+app.get('/api/admin/overview', authMiddleware, adminMiddleware, adminController.getOverview);
+app.get('/api/admin/users', authMiddleware, adminMiddleware, adminController.getUsers);
+app.put('/api/admin/users/:userId/deactivate', authMiddleware, adminMiddleware, adminController.deactivateUser);
+app.delete('/api/admin/logs/legacy', authMiddleware, adminMiddleware, adminController.clearLegacyLogs);
+app.get('/api/admin/settings', authMiddleware, adminMiddleware, adminController.getSettings);
+app.put('/api/admin/settings', authMiddleware, adminMiddleware, adminController.updateSettings);
+app.get('/api/admin/logs/export', authMiddleware, adminMiddleware, adminController.exportLogs);
+
+app.post('/api/auth/register', authController.register);
+app.post('/api/auth/login', authController.login);
+app.get('/api/auth/me', authController.verifyToken);
+
+app.get('/api/user/vaults', authMiddleware, vaultController.getMyVaults);
 
 // Global Error Handler for Multer and other middleware
 app.use((err, req, res, next) => {

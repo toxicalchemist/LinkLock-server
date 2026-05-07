@@ -12,7 +12,9 @@ const secretSchema = new Schema({
     createdAt: { type: Date, default: Date.now },
     fileUrl: { type: String, default: null },
     fileType: { type: String, default: null },
-    originalFileName: { type: String, default: null }
+    originalFileName: { type: String, default: null },
+    creatorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    status: { type: String, enum: ['Live', 'Burned'], default: 'Live' }
 }, { collection: 'active_links' });
 
 secretSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
