@@ -95,29 +95,24 @@ const initializeDB = async () => {
                     await SystemLog.create({
                         eventType: burnReason,
                         secretKey: secret.key,
-                        details: `Simulated Atlas Trigger Burned at views: ${secret.currentViews}/${secret.viewLimit}. Expired at: ${secret.expiresAt}, Now: ${now}`
+                        details: `Automated Lifecycle Purge at views: ${secret.currentViews}/${secret.viewLimit}.`
                     });
-                    
-                    console.log(`[SIMULATED ATLAS TRIGGER] Document burnt: ${burnReason} for key: ${secret.key}`);
                 }
             } catch (err) {
                 console.error('Trigger Simulation Error:', err);
             }
-        }, 2000);
+        }, 5000);
     mongoose.connect(mongoUri)
       .then(async () => {
-          console.log('MongoDB connected');
           try {
               const db = mongoose.connection.db;
               const collections = await db.listCollections({ name: 'systemlogs' }).toArray();
               if (collections.length > 0) {
-                  console.log('Migrating systemlogs to system_logs...');
                   const oldLogs = await db.collection('systemlogs').find({}).toArray();
                   if (oldLogs.length > 0) {
                       await db.collection('system_logs').insertMany(oldLogs);
                   }
                   await db.collection('systemlogs').drop();
-                  console.log('Migration complete. Dropped old systemlogs collection.');
               }
           } catch (migrationErr) {
               console.error('Migration error:', migrationErr);
@@ -131,8 +126,6 @@ initializeDB();
 // Route to create a new secret
 app.post('/api/secrets', authMiddleware, upload.single('file'), async (req, res) => {
     try {
-        console.log('Incoming Payload Body:', req.body);
-        console.log('Incoming File:', req.file);
         const { key, encryptedContent, iv, viewLimit, expiryValue, expiryUnit } = req.body;
         const file = req.file;
         
