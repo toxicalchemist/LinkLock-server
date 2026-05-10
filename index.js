@@ -128,65 +128,13 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/user', userRoutes);
 
+const { createSecret } = require('./controllers/linkController');
+const linkRoutes = require('./routes/linkRoutes');
+
+app.use('/api/links', linkRoutes);
+
 // Route to create a new secret
-app.post('/api/secrets', authMiddleware, upload.single('file'), async (req, res) => {
-    try {
-        console.log("Incoming Data:", req.body);
-        const { key, encryptedContent, iv, viewLimit, expiryValue, expiryUnit, authorizedEmails, isPrivate } = req.body;
-        const file = req.file;
-        
-        const settings = await Settings.findOne({});
-        if (settings && settings.maintenanceMode) {
-            return res.status(503).json({ error: 'System is under maintenance. Creation disabled.' });
-        }
-        
-        if (!key || !encryptedContent || !expiryValue || !expiryUnit) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
-
-        let unitMultiplier = 1;
-        if (expiryUnit === 'Minutes') unitMultiplier = 60;
-        else if (expiryUnit === 'Hours') unitMultiplier = 3600;
-        else if (expiryUnit === 'Days') unitMultiplier = 86400;
-        else return res.status(400).json({ error: 'Invalid expiry unit' });
-
-        const totalSeconds = parseInt(expiryValue) * unitMultiplier;
-        const expiresAt = new Date(Date.now() + totalSeconds * 1000);
-
-        const authorizedEmailsArray = Array.isArray(authorizedEmails) ? authorizedEmails : (authorizedEmails ? [authorizedEmails] : []);
-
-        const secretData = {
-            key,
-            encryptedContent,
-            iv,
-            viewLimit: viewLimit || 1,
-            expiresAt,
-            creatorId: req.user.id,
-            authorizedEmails: authorizedEmailsArray,
-            isPrivate: isPrivate === 'true' || isPrivate === true || false
-        };
-
-        if (file) {
-            secretData.fileUrl = `uploads/${file.filename}`;
-            secretData.fileType = file.mimetype;
-            secretData.originalFileName = file.originalname;
-        }
-
-        const secret = new Secret(secretData);
-        await secret.save();
-
-        await SystemLog.create({
-            eventType: 'SECRET_CREATED',
-            secretKey: key,
-            details: `New secret created with view limit: ${viewLimit}.`
-        });
-
-        res.status(201).json({ message: 'Secret created successfully', key });
-    } catch (err) {
-        console.error('Secret Creation Error:', err);
-        res.status(500).json({ error: 'Internal server error', details: err.message });
-    }
-});
+app.post('/api/secrets', authMiddleware, upload.single('file'), createSecret);
 
 // Route to retrieve and view a secret
 app.get('/api/secrets/:key', async (req, res) => {
