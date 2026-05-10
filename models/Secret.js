@@ -4,9 +4,9 @@ const Schema = mongoose.Schema;
 
 const secretSchema = new Schema({
     key: { type: String, required: true, unique: true }, // The unique identifier part of the link
-    encryptedContent: { type: String, required: true },
+    encryptedContent: { type: String, required: [true, "Payload is mandatory"] },
     iv: { type: String, required: true }, // Initialization vector if needed, or can be part of encrypted string
-    viewLimit: { type: Number, default: 1 },
+    viewLimit: { type: Number, default: 1, min: [1, "View limit must be at least 1"] },
     currentViews: { type: Number, default: 0 },
     expiresAt: { type: Date, required: true },
     createdAt: { type: Date, default: Date.now },

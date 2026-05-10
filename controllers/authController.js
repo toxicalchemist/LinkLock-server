@@ -12,11 +12,6 @@ const register = async (req, res, next) => {
             return res.status(400).json({ error: 'Full name, email, and password are required' });
         }
         
-        const existingUser = await User.findOne({ email: email.toLowerCase() });
-        if (existingUser) {
-            return res.status(400).json({ error: 'Email already exists' });
-        }
-
         const userRole = (role && typeof role === 'string') ? role.toLowerCase() : 'user';
 
         const user = new User({ 
