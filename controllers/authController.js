@@ -4,23 +4,26 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_development';
 
-const register = async (req, res) => {
+const register = async (req, res, next) => {
     try {
+        console.log("Incoming Data:", req.body);
         const { fullName, email, password, role } = req.body;
         if (!fullName || !email || !password) {
             return res.status(400).json({ error: 'Full name, email, and password are required' });
         }
         
-        const existingUser = await User.findOne({ email });
+        const existingUser = await User.findOne({ email: email.toLowerCase() });
         if (existingUser) {
             return res.status(400).json({ error: 'Email already exists' });
         }
 
+        const userRole = (role && typeof role === 'string') ? role.toLowerCase() : 'user';
+
         const user = new User({ 
             fullName, 
-            email, 
+            email: email.toLowerCase(), 
             password, 
-            role: role || 'User' 
+            role: userRole
         });
         await user.save();
         
@@ -33,11 +36,11 @@ const register = async (req, res) => {
         });
     } catch (error) {
         console.error('Registration error details:', error);
-        res.status(500).json({ error: 'Internal server error', message: error.message });
+        next(error);
     }
 };
 
-const login = async (req, res) => {
+const login = async (req, res, next) => {
     try {
         const { email, password } = req.body;
         
@@ -45,7 +48,7 @@ const login = async (req, res) => {
             return res.status(400).json({ error: 'Email and password are required' });
         }
 
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
@@ -64,11 +67,11 @@ const login = async (req, res) => {
         });
     } catch (error) {
         console.error('Login error details:', error);
-        res.status(500).json({ error: 'Internal server error', message: error.message });
+        next(error);
     }
 };
 
-const verifyToken = async (req, res) => {
+const verifyToken = async (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(' ')[1];
         if (!token) return res.status(401).json({ error: 'No token provided' });
@@ -80,7 +83,7 @@ const verifyToken = async (req, res) => {
 
         res.json({ user: { id: user._id, fullName: user.fullName, email: user.email, role: user.role } });
     } catch (error) {
-        res.status(401).json({ error: 'Invalid token' });
+        next(error);
     }
 };
 

@@ -14,7 +14,10 @@ const secretSchema = new Schema({
     fileType: { type: String, default: null },
     originalFileName: { type: String, default: null },
     creatorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    status: { type: String, enum: ['Live', 'Burned'], default: 'Live' }
+    status: { type: String, enum: ['Live', 'Burned'], default: 'Live' },
+    authorizedEmails: { type: [String], default: [] },
+    viewedBy: { type: [String], default: [] },
+    isPrivate: { type: Boolean, default: false }
 }, { collection: 'active_links' });
 
 secretSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
